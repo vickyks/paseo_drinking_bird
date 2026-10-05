@@ -73,13 +73,13 @@ export default function contribute(server: PluginServerContext) {
         },
       });
 
-      const isApprovalRequired = config.mode === "supervised" && (action.state === "CONTINUE" || action.state === "VERIFY_DONE" || action.state === "NEXT_TODO") && action.prompt !== undefined;
+      const isApprovalRequired = config.mode === "supervised" && (action.state === "CONTINUE" || action.state === "VERIFY_DONE" || action.state === "NEXT_TODO" || action.state === "NEEDS_USER") && action.prompt !== undefined;
       const timelineId = `turn-${event.turnId ?? Date.now()}`;
       const actionStatus: "pending" | "automatic" = isApprovalRequired ? "pending" : "automatic";
       const timelineData: { state: typeof action.state; confidence: number; reason: string; turnId: string | null; action_status: "pending" | "automatic"; prompt?: string } = { state: action.state, confidence: action.confidence, reason: action.reason, turnId: event.turnId, action_status: actionStatus };
       if (action.prompt !== undefined) timelineData.prompt = action.prompt;
       await agent.timeline.append({ type: "plugin", id: timelineId, kind: controllerTimelineKind, version: controllerTimelineVersion, data: timelineData });
-      if (isApprovalRequired && action.prompt !== undefined && (action.state === "CONTINUE" || action.state === "VERIFY_DONE" || action.state === "NEXT_TODO")) pendingActions.set(event.agent.id, { timelineId, turnId: event.turnId, state: action.state, prompt: action.prompt, reason: action.reason, confidence: action.confidence });
+      if (isApprovalRequired && action.prompt !== undefined && (action.state === "CONTINUE" || action.state === "VERIFY_DONE" || action.state === "NEXT_TODO" || action.state === "NEEDS_USER")) pendingActions.set(event.agent.id, { timelineId, turnId: event.turnId, state: action.state, prompt: action.prompt, reason: action.reason, confidence: action.confidence });
       else pendingActions.delete(event.agent.id);
 
       console.error(JSON.stringify({
@@ -138,7 +138,7 @@ export default function contribute(server: PluginServerContext) {
         }
       }
 
-      if ((action.state === "DONE" && !demoFailed) || action.state === "NEEDS_USER") {
+      if ((action.state === "DONE" && !demoFailed) || (action.state === "NEEDS_USER" && !isApprovalRequired)) {
         controllers.delete(event.agent.id);
         reviewerContextRounds.delete(event.agent.id);
         pendingActions.delete(event.agent.id);
