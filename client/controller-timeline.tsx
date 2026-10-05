@@ -10,6 +10,10 @@ function ControllerDecision({ theme, layout, item }: PluginTimelineItemProps<Con
       <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Drinking Bird: {data.state}</Text>
       <Text style={{ color: theme.colors.foregroundMuted }}>Confidence: {Math.round(data.confidence * 100)}%</Text>
       <Text style={{ color: theme.colors.foregroundMuted }}>{data.reason}</Text>
+      {data.action_status === "pending" && <Text style={{ color: theme.colors.statusWarning }}>Pending approval — use /drinking-bird approve or reject</Text>}
+      {data.action_status === "approved" && <Text style={{ color: theme.colors.statusSuccess }}>Approved</Text>}
+      {data.action_status === "rejected" && <Text style={{ color: theme.colors.statusDanger }}>Rejected</Text>}
+      {data.prompt && <Text style={{ color: theme.colors.foregroundMuted }}>Proposed action: {data.prompt}</Text>}
     </View>
   );
 }

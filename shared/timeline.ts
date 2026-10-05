@@ -7,5 +7,7 @@ export const controllerTimelineSchema = z.object({
   confidence: z.number().min(0).max(1),
   reason: z.string(),
   turnId: z.string().nullable(),
+  action_status: z.enum(["automatic", "pending", "approved", "rejected"]).optional(),
+  prompt: z.string().optional(),
 });
 export type ControllerTimelineData = z.infer<typeof controllerTimelineSchema>;

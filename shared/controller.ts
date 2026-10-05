@@ -5,7 +5,7 @@ import type { ControllerAction, ControllerConfig, TurnClassificationInput, TurnS
 export interface ControllerEvent { type: "STATE_EVALUATED" | "AUTO_CONTINUE_REQUESTED" | "VERIFY_REQUESTED" | "NEXT_TODO_REQUESTED" | "USER_INPUT_REQUIRED" | "DECISION_REQUIRED" | "TASK_COMPLETED" | "LOOP_GUARD_TRIPPED"; state?: TurnState; confidence?: number; reason?: string; }
 export type EventSink = (event: ControllerEvent) => void;
 
-export interface ControllerRuntime { snapshot: ProgressSnapshot; continueAgent(prompt: string): Promise<void>; }
+export interface ControllerRuntime { snapshot: ProgressSnapshot; continueAgent(prompt: string): Promise<void>; autoAct?: boolean; }
 
 export const prompts = {
   CONTINUE: "Continue the current task. Do not stop merely to report progress. Complete the current work unless genuinely blocked.",
@@ -44,7 +44,7 @@ export class ContinuationController {
     }
     const prompt = prompts[classification.state];
     this.emit({ type: classification.state === "CONTINUE" ? "AUTO_CONTINUE_REQUESTED" : classification.state === "VERIFY_DONE" ? "VERIFY_REQUESTED" : "NEXT_TODO_REQUESTED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
-    await runtime.continueAgent(prompt);
+    if (runtime.autoAct !== false) await runtime.continueAgent(prompt);
     return { ...classification, prompt, reason: classification.reason ?? `Requested ${classification.state}` };
   }
 }

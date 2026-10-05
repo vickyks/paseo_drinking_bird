@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { ClassifierConfig, ControllerConfig } from "../shared/types.js";
 
 export interface DrinkingBirdConfig {
+  mode: "auto" | "supervised";
   classifier: ClassifierConfig;
   limits: ControllerConfig;
   reviewer: { enabled: boolean; provider?: string; model?: string; max_context_round_trips: number };
@@ -9,6 +10,7 @@ export interface DrinkingBirdConfig {
 }
 
 const defaults: DrinkingBirdConfig = {
+  mode: "auto",
   classifier: { provider: "hybrid", deterministic_first: true, auto_act_confidence: 0.8, escalate_below: 0.55 },
   limits: { max_auto_turns: 12, max_repeated_state: 3, max_identical_blocker_repeats: 2, auto_act_confidence: 0.8, escalate_below: 0.55 },
   reviewer: { enabled: false, max_context_round_trips: 3 },
@@ -18,6 +20,7 @@ const defaults: DrinkingBirdConfig = {
 export async function loadConfig(): Promise<DrinkingBirdConfig> {
   const file = process.env.PASEO_DRINKING_BIRD_CONFIG_FILE;
   const fileConfig = file ? JSON.parse(await readFile(file, "utf8")) as Partial<DrinkingBirdConfig> : {};
+  const mode = fileConfig.mode === "supervised" ? "supervised" : process.env.PASEO_DRINKING_BIRD_MODE === "supervised" ? "supervised" : defaults.mode;
   const classifier = { ...defaults.classifier, ...(fileConfig.classifier ?? {}) };
   const limits = { ...defaults.limits, ...(fileConfig.limits ?? {}) };
   const reviewer = { ...defaults.reviewer, ...(fileConfig.reviewer ?? {}) };
@@ -33,5 +36,5 @@ export async function loadConfig(): Promise<DrinkingBirdConfig> {
   if (process.env.PASEO_DRINKING_BIRD_DEMO_ENABLED === "true") demo.enabled = true;
   if (process.env.PASEO_DRINKING_BIRD_DEMO_PLAN) demo.plan_file = process.env.PASEO_DRINKING_BIRD_DEMO_PLAN;
   if (process.env.PASEO_DRINKING_BIRD_DEMO_BASE_URL) demo.base_url = process.env.PASEO_DRINKING_BIRD_DEMO_BASE_URL;
-  return { classifier, limits, reviewer, demo };
+  return { mode, classifier, limits, reviewer, demo };
 }

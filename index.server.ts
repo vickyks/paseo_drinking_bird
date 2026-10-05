@@ -9,15 +9,27 @@ import { controllerTimelineKind, controllerTimelineVersion } from "./shared/time
 import { contextPrompt, decisionPrompt } from "./shared/reviewer.js";
 import { requestTechnicalReview } from "./server/decision-router.js";
 import { runPlaywrightDemo } from "./server/playwright-demo.js";
-import { prompts } from "./shared/controller.js";
+import { supervisionRpc } from "./shared/supervision.js";
 
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
 const reviewerContextRounds = new Map<string, number>();
+const pendingActions = new Map<string, { timelineId: string; turnId: string | null; state: "CONTINUE" | "VERIFY_DONE" | "NEXT_TODO"; prompt: string; reason: string; confidence: number }>();
 
 export default function contribute(server: PluginServerContext) {
   const stateStore = new StateStore();
   const configPromise = loadConfig();
+
+  server.handle(supervisionRpc, async ({ agentId, action }, { paseo }) => {
+    const pending = pendingActions.get(agentId);
+    if (!pending) return { ok: false, message: "No pending Drinking Bird action exists for this agent." };
+    const agent = paseo.agents.ref(agentId);
+    const actionStatus = action === "approve" ? "approved" : "rejected";
+    await agent.timeline.append({ type: "plugin", id: pending.timelineId, kind: controllerTimelineKind, version: controllerTimelineVersion, data: { state: pending.state, confidence: pending.confidence, reason: pending.reason, turnId: pending.turnId, action_status: actionStatus, prompt: pending.prompt } });
+    pendingActions.delete(agentId);
+    if (action === "approve") await agent.send(pending.prompt);
+    return { ok: true, message: action === "approve" ? "Drinking Bird action approved and sent." : "Drinking Bird action rejected." };
+  });
 
   server.on("agent.turn_ended", async (event, { paseo, signal }) => {
     const previous = queues.get(event.agent.id) ?? Promise.resolve();
@@ -45,21 +57,23 @@ export default function contribute(server: PluginServerContext) {
           commit: "unknown",
           mr: "unknown",
           blocker: input.explicit_blocker ?? "",
-          action: input.last_agent_message,
+            action: input.last_agent_message,
         },
+        autoAct: config.mode !== "supervised",
         continueAgent: async (prompt) => {
           if (signal.aborted) return;
           await agent.send(prompt);
         },
       });
 
-      await agent.timeline.append({
-        type: "plugin",
-        id: `turn-${event.turnId ?? Date.now()}`,
-        kind: controllerTimelineKind,
-        version: controllerTimelineVersion,
-        data: { state: action.state, confidence: action.confidence, reason: action.reason, turnId: event.turnId },
-      });
+      const isApprovalRequired = config.mode === "supervised" && (action.state === "CONTINUE" || action.state === "VERIFY_DONE" || action.state === "NEXT_TODO") && action.prompt !== undefined;
+      const timelineId = `turn-${event.turnId ?? Date.now()}`;
+      const actionStatus: "pending" | "automatic" = isApprovalRequired ? "pending" : "automatic";
+      const timelineData: { state: typeof action.state; confidence: number; reason: string; turnId: string | null; action_status: "pending" | "automatic"; prompt?: string } = { state: action.state, confidence: action.confidence, reason: action.reason, turnId: event.turnId, action_status: actionStatus };
+      if (action.prompt !== undefined) timelineData.prompt = action.prompt;
+      await agent.timeline.append({ type: "plugin", id: timelineId, kind: controllerTimelineKind, version: controllerTimelineVersion, data: timelineData });
+      if (isApprovalRequired && action.prompt !== undefined && (action.state === "CONTINUE" || action.state === "VERIFY_DONE" || action.state === "NEXT_TODO")) pendingActions.set(event.agent.id, { timelineId, turnId: event.turnId, state: action.state, prompt: action.prompt, reason: action.reason, confidence: action.confidence });
+      else pendingActions.delete(event.agent.id);
 
       console.error(JSON.stringify({
         event: "STATE_EVALUATED",
@@ -120,6 +134,7 @@ export default function contribute(server: PluginServerContext) {
       if ((action.state === "DONE" && !demoFailed) || action.state === "NEEDS_USER") {
         controllers.delete(event.agent.id);
         reviewerContextRounds.delete(event.agent.id);
+        pendingActions.delete(event.agent.id);
         await stateStore.delete(event.agent.id);
       } else {
         await stateStore.set(event.agent.id, { guard: controller.guardState(), reviewerContextRounds: reviewerContextRounds.get(event.agent.id) ?? 0, updatedAt: new Date().toISOString() });
@@ -136,6 +151,7 @@ export default function contribute(server: PluginServerContext) {
   return () => {
     controllers.clear();
     reviewerContextRounds.clear();
+    pendingActions.clear();
     queues.clear();
   };
 }
