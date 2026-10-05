@@ -13,7 +13,6 @@
   "dependencies": {
     "@getpaseo/plugin": "^0.10.3",
     "@getpaseo/protocol": "^0.10.3",
-    "playwright": "^1.63.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

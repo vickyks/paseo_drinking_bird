@@ -68,19 +68,17 @@ A visible Playwright demo is also opt-in:
     "plan_file": "./demo-plan.json",
     "base_url": "http://localhost:3000",
     "evidence_dir": "./drinking-bird-demo-evidence",
+    "command": "npx",
+    "args": ["playwright", "test", "./demo-plan.json"],
     "headless": false,
     "speed": 1
   }
 }
 ```
 
-Install the browser executable on the daemon host before enabling demos:
+The plugin invokes the configured external Playwright runner with environment variables containing the plan, evidence directory, base URL, visibility, speed, and pacing configuration. Keep Playwright and its browser executable in the application workspace or a separately managed tool environment rather than bundling them into the Paseo plugin. The runner should preserve screenshots and browser errors in `evidence_dir`.
 
-```bash
-npx playwright install chromium
-```
-
-The demo runner captures screenshots, browser console errors, and page errors. A demo failure sends `VERIFY_DONE` guidance to the original implementation agent; it never silently turns a failed demo into task completion.
+A demo failure sends `VERIFY_DONE` guidance to the original implementation agent; it never silently turns a failed demo into task completion.
 
 ## Development
 

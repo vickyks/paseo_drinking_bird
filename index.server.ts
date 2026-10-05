@@ -109,7 +109,7 @@ export default function contribute(server: PluginServerContext) {
       if (action.state === "DONE" && config.demo.enabled && config.demo.plan_file) {
         try {
           const demo = await runPlaywrightDemo(config.demo.plan_file, config.demo);
-          console.error(JSON.stringify({ event: "DEMO_COMPLETED", agentId: event.agent.id, screenshots: demo.screenshots, consoleErrors: demo.consoleErrors.length, pageErrors: demo.pageErrors.length }));
+          console.error(JSON.stringify({ event: "DEMO_COMPLETED", agentId: event.agent.id, evidenceDir: demo.evidenceDir, output: demo.output.slice(-2000) }));
         } catch (error) {
           demoFailed = true;
           console.error(JSON.stringify({ event: "DEMO_FAILED", agentId: event.agent.id, reason: error instanceof Error ? error.message : String(error) }));

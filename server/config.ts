@@ -5,7 +5,7 @@ export interface DrinkingBirdConfig {
   classifier: ClassifierConfig;
   limits: ControllerConfig;
   reviewer: { enabled: boolean; provider?: string; model?: string; max_context_round_trips: number };
-  demo: { enabled: boolean; plan_file?: string; evidence_dir: string; base_url?: string; headless: boolean; speed: number };
+  demo: { enabled: boolean; plan_file?: string; command?: string; args?: string[]; evidence_dir: string; base_url?: string; headless: boolean; speed: number };
 }
 
 const defaults: DrinkingBirdConfig = {
