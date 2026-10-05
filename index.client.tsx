@@ -8,12 +8,12 @@ export default function contribute(client: PluginClientContext): PluginCleanup {
   const removeCommand = client.addSlashCommand({
     name: "drinking-bird",
     description: "Approve or reject a pending Drinking Bird action",
-    argumentHint: "approve|reject",
+    argumentHint: "auto|supervise|approve|reject",
     context: "agent",
     async onSubmit({ args, agent, rpc }) {
       const action = args.trim();
-      if (action !== "approve" && action !== "reject") throw new Error("Use /drinking-bird approve or /drinking-bird reject");
-      await rpc(supervisionRpc, { agentId: agent.id, action });
+      if (!["auto", "supervise", "approve", "reject"].includes(action)) throw new Error("Use /drinking-bird auto, supervise, approve, or reject");
+      await rpc(supervisionRpc, { agentId: agent.id, action: action as "auto" | "supervise" | "approve" | "reject" });
     },
   });
   return () => { removeCommand(); removeTimeline(); };

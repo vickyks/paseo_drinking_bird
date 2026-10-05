@@ -60,7 +60,14 @@ Example `drinking-bird.json`:
 }
 ```
 
-In supervised mode, review the decision in the Paseo timeline and use `/drinking-bird approve` or `/drinking-bird reject` from the agent composer. The proposed prompt is displayed in the timeline before approval. Reload after changing the file:
+You can switch modes directly from the agent composer:
+
+```text
+/drinking-bird auto
+/drinking-bird supervise
+```
+
+In supervised mode, review the decision in the Paseo timeline and use `/drinking-bird approve` or `/drinking-bird reject`. The proposed prompt is displayed in the timeline before approval. Mode changes are persisted immediately and do not require a plugin reload. Reload after changing the configuration file:
 
 ```bash
 paseo plugin reload paseo-drinking-bird

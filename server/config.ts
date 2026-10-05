@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { ClassifierConfig, ControllerConfig } from "../shared/types.js";
 
 export interface DrinkingBirdConfig {
@@ -19,8 +19,20 @@ const defaults: DrinkingBirdConfig = {
   demo: { enabled: false, evidence_dir: "./drinking-bird-demo-evidence", headless: false, speed: 1 },
 };
 
+export function configPath(): string {
+  return process.env.PASEO_DRINKING_BIRD_CONFIG_FILE ?? join(homedir(), ".paseo", "paseo-drinking-bird", "config.json");
+}
+
+export async function saveMode(mode: DrinkingBirdConfig["mode"]): Promise<void> {
+  const file = configPath();
+  let current: Record<string, unknown> = {};
+  try { current = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>; } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify({ ...current, mode }, null, 2)}\n`, "utf8");
+}
+
 export async function loadConfig(): Promise<DrinkingBirdConfig> {
-  const file = process.env.PASEO_DRINKING_BIRD_CONFIG_FILE ?? join(homedir(), ".paseo", "paseo-drinking-bird", "config.json");
+  const file = configPath();
   let fileConfig: Partial<DrinkingBirdConfig> = {};
   try {
     fileConfig = JSON.parse(await readFile(file, "utf8")) as Partial<DrinkingBirdConfig>;

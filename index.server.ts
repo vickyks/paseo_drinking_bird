@@ -4,7 +4,7 @@ import { createClassifier } from "./shared/classifier.js";
 import { buildTurnClassificationInput } from "./server/turn-input.js";
 import { latestOutputText } from "./server/inspect.js";
 import { StateStore, type PendingActionState } from "./server/state-store.js";
-import { loadConfig } from "./server/config.js";
+import { loadConfig, saveMode } from "./server/config.js";
 import { controllerTimelineKind, controllerTimelineVersion } from "./shared/timeline.js";
 import { contextPrompt, decisionPrompt } from "./shared/reviewer.js";
 import { requestTechnicalReview } from "./server/decision-router.js";
@@ -18,9 +18,16 @@ const pendingActions = new Map<string, PendingActionState>();
 
 export default function contribute(server: PluginServerContext) {
   const stateStore = new StateStore();
-  const configPromise = loadConfig();
+  let runtimeConfig: Awaited<ReturnType<typeof loadConfig>> | undefined;
+  const getConfig = async () => runtimeConfig ??= await loadConfig();
 
   server.handle(supervisionRpc, async ({ agentId, action }, { paseo }) => {
+    const config = await getConfig();
+    if (action === "auto" || action === "supervise") {
+      config.mode = action === "auto" ? "auto" : "supervised";
+      await saveMode(config.mode);
+      return { ok: true, message: `Drinking Bird mode set to ${config.mode}.` };
+    }
     const pending = pendingActions.get(agentId) ?? (await stateStore.get(agentId))?.pendingAction;
     if (!pending) return { ok: false, message: "No pending Drinking Bird action exists for this agent." };
     const agent = paseo.agents.ref(agentId);
@@ -37,7 +44,7 @@ export default function contribute(server: PluginServerContext) {
       if (signal.aborted || event.outcome.kind === "canceled") return;
 
       const input = buildTurnClassificationInput(event.agent, event.timeline, event.outcome);
-      const config = await configPromise;
+      const config = await getConfig();
       let controller = controllers.get(event.agent.id);
       if (!controller) {
         const persisted = await stateStore.get(event.agent.id);
