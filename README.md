@@ -47,11 +47,17 @@ Example `drinking-bird.json`:
     "max_auto_turns": 12,
     "max_repeated_state": 3,
     "max_identical_blocker_repeats": 2
+  },
+  "reviewer": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "max_context_round_trips": 3
   }
 }
 ```
 
-`rules` uses only deterministic checks. `hybrid` uses those checks first and falls back to the configured HTTP classifier, or the local heuristic classifier when no endpoint is configured. `jev`, `openai`, and `local` all use the provider-neutral HTTP contract; the orchestration layer does not depend on the provider name.
+`rules` uses only deterministic checks. `hybrid` uses those checks first and falls back to the configured HTTP classifier, or the local heuristic classifier when no endpoint is configured. `jev`, `openai`, and `local` all use the provider-neutral HTTP contract; the orchestration layer does not depend on the provider name. Reviewer delegation is disabled by default until a reviewer provider is configured; enabling it creates a separate review-only child agent and returns its structured decision to the original agent.
 
 ## Development
 

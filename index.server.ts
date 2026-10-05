@@ -6,6 +6,8 @@ import { latestOutputText } from "./server/inspect.js";
 import { StateStore } from "./server/state-store.js";
 import { loadConfig } from "./server/config.js";
 import { controllerTimelineKind, controllerTimelineVersion } from "./shared/timeline.js";
+import { contextPrompt, decisionPrompt } from "./shared/reviewer.js";
+import { requestTechnicalReview } from "./server/decision-router.js";
 
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
@@ -64,6 +66,30 @@ export default function contribute(server: PluginServerContext) {
         reason: action.reason,
         outputLength: latestOutputText(event.timeline).length,
       }));
+
+      if (action.state === "NEEDS_DECISION" && config.reviewer.enabled) {
+        try {
+          const review = await requestTechnicalReview(paseo, {
+            agentId: event.agent.id,
+            parentAgentId: event.agent.parentAgentId,
+            cwd: event.agent.cwd,
+            provider: config.reviewer.provider ?? event.agent.provider,
+            model: config.reviewer.model,
+            request: {
+              task_summary: input.task.original_request,
+              decision_required: input.last_agent_message || action.reason,
+              constraints: input.task.success_criteria,
+              implementation_context: JSON.stringify(input.recent_activity.slice(-10)),
+              evidence: input.runtime?.files_modified?.map((file) => ({ type: "modified_file", summary: file })),
+            },
+          });
+          if (review.status === "DECIDED") await agent.send(decisionPrompt(review));
+          else await agent.send(contextPrompt(review.required_information));
+          console.error(JSON.stringify({ event: "REVIEW_COMPLETED", agentId: event.agent.id, status: review.status, decision: review.status === "DECIDED" ? review.decision : undefined }));
+        } catch (error) {
+          console.error(JSON.stringify({ event: "REVIEW_FAILED", agentId: event.agent.id, reason: error instanceof Error ? error.message : String(error) }));
+        }
+      }
 
       if (action.state === "DONE" || action.state === "NEEDS_USER") {
         controllers.delete(event.agent.id);
