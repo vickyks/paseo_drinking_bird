@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ClassifierConfig, ControllerConfig } from "../shared/types.js";
 
 export interface DrinkingBirdConfig {
@@ -18,8 +20,13 @@ const defaults: DrinkingBirdConfig = {
 };
 
 export async function loadConfig(): Promise<DrinkingBirdConfig> {
-  const file = process.env.PASEO_DRINKING_BIRD_CONFIG_FILE;
-  const fileConfig = file ? JSON.parse(await readFile(file, "utf8")) as Partial<DrinkingBirdConfig> : {};
+  const file = process.env.PASEO_DRINKING_BIRD_CONFIG_FILE ?? join(homedir(), ".paseo", "paseo-drinking-bird", "config.json");
+  let fileConfig: Partial<DrinkingBirdConfig> = {};
+  try {
+    fileConfig = JSON.parse(await readFile(file, "utf8")) as Partial<DrinkingBirdConfig>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   const mode = fileConfig.mode === "supervised" ? "supervised" : process.env.PASEO_DRINKING_BIRD_MODE === "supervised" ? "supervised" : defaults.mode;
   const classifier = { ...defaults.classifier, ...(fileConfig.classifier ?? {}) };
   const limits = { ...defaults.limits, ...(fileConfig.limits ?? {}) };

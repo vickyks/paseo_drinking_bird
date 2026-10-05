@@ -25,9 +25,11 @@ The current Paseo plugin uses the `agent.turn_ended` lifecycle hook to build a s
 
 ## Configuration
 
-The daemon reads optional JSON configuration from `PASEO_DRINKING_BIRD_CONFIG_FILE`. Environment variables override the classifier settings. Set `mode` to `supervised` to review routine follow-ups before they are sent:
+The daemon reads optional JSON configuration from `~/.paseo/paseo-drinking-bird/config.json`. Set `PASEO_DRINKING_BIRD_CONFIG_FILE` to use another path. Environment variables override the classifier settings. Set `mode` to `supervised` to review routine follow-ups before they are sent:
 
 ```bash
+mkdir -p ~/.paseo/paseo-drinking-bird
+$EDITOR ~/.paseo/paseo-drinking-bird/config.json
 export PASEO_DRINKING_BIRD_CONFIG_FILE="$PWD/drinking-bird.json"
 export PASEO_DRINKING_BIRD_CLASSIFIER_API_KEY="..."
 ```
@@ -58,7 +60,11 @@ Example `drinking-bird.json`:
 }
 ```
 
-In supervised mode, review the decision in the Paseo timeline and use `/drinking-bird approve` or `/drinking-bird reject` from the agent composer. The proposed prompt is displayed in the timeline before approval.
+In supervised mode, review the decision in the Paseo timeline and use `/drinking-bird approve` or `/drinking-bird reject` from the agent composer. The proposed prompt is displayed in the timeline before approval. Reload after changing the file:
+
+```bash
+paseo plugin reload paseo-drinking-bird
+```
 
 `rules` uses only deterministic checks. `hybrid` uses those checks first and falls back to the configured HTTP classifier, or the local heuristic classifier when no endpoint is configured. `jev`, `openai`, and `local` all use the provider-neutral HTTP contract; the orchestration layer does not depend on the provider name. Reviewer delegation is disabled by default until a reviewer provider is configured; enabling it creates a separate review-only child agent and returns its structured decision to the original agent.
 
