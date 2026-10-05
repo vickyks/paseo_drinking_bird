@@ -80,6 +80,23 @@ The plugin invokes the configured external Playwright runner with environment va
 
 A demo failure sends `VERIFY_DONE` guidance to the original implementation agent; it never silently turns a failed demo into task completion.
 
+## Enable and disable
+
+The installed plugin can be toggled without deleting the source or persisted controller state:
+
+```bash
+paseo plugin disable paseo-drinking-bird
+paseo plugin enable paseo-drinking-bird
+paseo plugin reload paseo-drinking-bird
+paseo plugin ls
+```
+
+`disable` stops lifecycle supervision and automatic follow-ups. `enable` starts it again. Use `remove` only when the plugin should be uninstalled:
+
+```bash
+paseo plugin remove paseo-drinking-bird
+```
+
 ## Development
 
 ```bash
