@@ -5,6 +5,7 @@ import { buildTurnClassificationInput } from "./server/turn-input.js";
 import { latestOutputText } from "./server/inspect.js";
 import { StateStore } from "./server/state-store.js";
 import { loadConfig } from "./server/config.js";
+import { controllerTimelineKind, controllerTimelineVersion } from "./shared/timeline.js";
 
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
@@ -44,6 +45,14 @@ export default function contribute(server: PluginServerContext) {
           if (signal.aborted) return;
           await agent.send(prompt);
         },
+      });
+
+      await agent.timeline.append({
+        type: "plugin",
+        id: `turn-${event.turnId ?? Date.now()}`,
+        kind: controllerTimelineKind,
+        version: controllerTimelineVersion,
+        data: { state: action.state, confidence: action.confidence, reason: action.reason, turnId: event.turnId },
       });
 
       console.error(JSON.stringify({
