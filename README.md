@@ -89,6 +89,56 @@ The plugin invokes the configured external Playwright runner with environment va
 
 A demo failure sends `VERIFY_DONE` guidance to the original implementation agent; it never silently turns a failed demo into task completion.
 
+## View decision confidence
+
+Every controller decision includes a confidence value between `0` and `1`.
+
+### In the Paseo timeline
+
+Open the supervised agent in Paseo. Drinking Bird timeline entries show:
+
+```text
+Drinking Bird: CONTINUE
+Confidence: 91%
+The agent describes unfinished work
+```
+
+In supervised mode, the entry also shows the proposed prompt and remains marked `Pending approval` until you approve or reject it.
+
+### From the daemon logs
+
+```bash
+paseo plugin logs paseo-drinking-bird --json
+```
+
+Filter only evaluated decisions:
+
+```bash
+paseo plugin logs paseo-drinking-bird --json \
+  | jq -r '.[] | .message | fromjson? | select(.event == "STATE_EVALUATED") | [.agentId, .turnId, .state, (.confidence|tostring), .reason] | @tsv'
+```
+
+Example output:
+
+```text
+agent-id  turn-id  CONTINUE  0.91  The agent describes unfinished work
+```
+
+### Confidence thresholds
+
+The default automatic-action threshold is `0.80`. Decisions below that threshold do not automatically send a follow-up and become `NEEDS_USER`. Configure it in the controller limits:
+
+```json
+{
+  "limits": {
+    "auto_act_confidence": 0.8,
+    "escalate_below": 0.55
+  }
+}
+```
+
+The confidence is a classifier signal, not proof of correctness. Deterministic runtime checks can still produce high-confidence decisions when Paseo directly observes the relevant fact.
+
 ## Enable and disable
 
 The installed plugin can be toggled without deleting the source or persisted controller state:

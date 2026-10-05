@@ -3,9 +3,19 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { LoopGuardState } from "../shared/safety.js";
 
+export interface PendingActionState {
+  timelineId: string;
+  turnId: string | null;
+  state: "CONTINUE" | "VERIFY_DONE" | "NEXT_TODO";
+  prompt: string;
+  reason: string;
+  confidence: number;
+}
+
 export interface PersistedAgentState {
   guard: LoopGuardState;
   reviewerContextRounds?: number;
+  pendingAction?: PendingActionState;
   updatedAt: string;
 }
 

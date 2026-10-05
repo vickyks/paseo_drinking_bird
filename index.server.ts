@@ -3,7 +3,7 @@ import { ContinuationController } from "./shared/controller.js";
 import { createClassifier } from "./shared/classifier.js";
 import { buildTurnClassificationInput } from "./server/turn-input.js";
 import { latestOutputText } from "./server/inspect.js";
-import { StateStore } from "./server/state-store.js";
+import { StateStore, type PendingActionState } from "./server/state-store.js";
 import { loadConfig } from "./server/config.js";
 import { controllerTimelineKind, controllerTimelineVersion } from "./shared/timeline.js";
 import { contextPrompt, decisionPrompt } from "./shared/reviewer.js";
@@ -14,14 +14,14 @@ import { supervisionRpc } from "./shared/supervision.js";
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
 const reviewerContextRounds = new Map<string, number>();
-const pendingActions = new Map<string, { timelineId: string; turnId: string | null; state: "CONTINUE" | "VERIFY_DONE" | "NEXT_TODO"; prompt: string; reason: string; confidence: number }>();
+const pendingActions = new Map<string, PendingActionState>();
 
 export default function contribute(server: PluginServerContext) {
   const stateStore = new StateStore();
   const configPromise = loadConfig();
 
   server.handle(supervisionRpc, async ({ agentId, action }, { paseo }) => {
-    const pending = pendingActions.get(agentId);
+    const pending = pendingActions.get(agentId) ?? (await stateStore.get(agentId))?.pendingAction;
     if (!pending) return { ok: false, message: "No pending Drinking Bird action exists for this agent." };
     const agent = paseo.agents.ref(agentId);
     const actionStatus = action === "approve" ? "approved" : "rejected";
@@ -137,7 +137,7 @@ export default function contribute(server: PluginServerContext) {
         pendingActions.delete(event.agent.id);
         await stateStore.delete(event.agent.id);
       } else {
-        await stateStore.set(event.agent.id, { guard: controller.guardState(), reviewerContextRounds: reviewerContextRounds.get(event.agent.id) ?? 0, updatedAt: new Date().toISOString() });
+        await stateStore.set(event.agent.id, { guard: controller.guardState(), reviewerContextRounds: reviewerContextRounds.get(event.agent.id) ?? 0, pendingAction: pendingActions.get(event.agent.id), updatedAt: new Date().toISOString() });
       }
     });
     queues.set(event.agent.id, current);
