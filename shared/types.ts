@@ -64,6 +64,8 @@ export interface ControllerConfig {
   max_auto_turns: number;
   max_repeated_state: number;
   max_identical_blocker_repeats: number;
+  auto_act_confidence: number;
+  escalate_below: number;
 }
 
 export interface ControllerAction {

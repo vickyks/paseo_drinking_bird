@@ -10,7 +10,7 @@ export interface DrinkingBirdConfig {
 
 const defaults: DrinkingBirdConfig = {
   classifier: { provider: "hybrid", deterministic_first: true, auto_act_confidence: 0.8, escalate_below: 0.55 },
-  limits: { max_auto_turns: 12, max_repeated_state: 3, max_identical_blocker_repeats: 2 },
+  limits: { max_auto_turns: 12, max_repeated_state: 3, max_identical_blocker_repeats: 2, auto_act_confidence: 0.8, escalate_below: 0.55 },
   reviewer: { enabled: false, max_context_round_trips: 3 },
   demo: { enabled: false, evidence_dir: "./drinking-bird-demo-evidence", headless: false, speed: 1 },
 };

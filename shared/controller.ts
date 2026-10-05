@@ -15,8 +15,10 @@ export const prompts = {
 
 export class ContinuationController {
   private readonly guard: LoopGuard;
+  private readonly autoActConfidence: number;
   constructor(private readonly classifier: TurnClassifier, config: Partial<ControllerConfig> = {}, private readonly emit: EventSink = () => {}, initialGuardState?: LoopGuardState) {
-    this.guard = new LoopGuard({ max_auto_turns: 12, max_repeated_state: 3, max_identical_blocker_repeats: 2, ...config }, initialGuardState);
+    this.autoActConfidence = config.auto_act_confidence ?? 0.8;
+    this.guard = new LoopGuard({ max_auto_turns: 12, max_repeated_state: 3, max_identical_blocker_repeats: 2, auto_act_confidence: 0.8, escalate_below: 0.55, ...config }, initialGuardState);
   }
 
   guardState(): LoopGuardState {
@@ -26,6 +28,12 @@ export class ContinuationController {
   async evaluate(input: TurnClassificationInput, runtime: ControllerRuntime): Promise<ControllerAction> {
     const classification = await this.classifier.classify(input);
     this.emit({ type: "STATE_EVALUATED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
+    const automaticState = classification.state === "CONTINUE" || classification.state === "VERIFY_DONE" || classification.state === "NEXT_TODO" || classification.state === "NEEDS_DECISION";
+    if (automaticState && classification.confidence < this.autoActConfidence) {
+      const reason = `Low-confidence classification (${classification.confidence.toFixed(2)}); automatic action requires ${this.autoActConfidence.toFixed(2)}`;
+      this.emit({ type: "USER_INPUT_REQUIRED", state: "NEEDS_USER", confidence: classification.confidence, reason });
+      return { state: "NEEDS_USER", confidence: classification.confidence, reason };
+    }
     const guardReason = classification.state === "DONE" || classification.state === "NEEDS_USER" ? undefined : this.guard.record(classification, runtime.snapshot);
     if (guardReason) {
       this.emit({ type: "LOOP_GUARD_TRIPPED", reason: guardReason });
