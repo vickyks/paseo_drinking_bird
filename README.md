@@ -59,6 +59,29 @@ Example `drinking-bird.json`:
 
 `rules` uses only deterministic checks. `hybrid` uses those checks first and falls back to the configured HTTP classifier, or the local heuristic classifier when no endpoint is configured. `jev`, `openai`, and `local` all use the provider-neutral HTTP contract; the orchestration layer does not depend on the provider name. Reviewer delegation is disabled by default until a reviewer provider is configured; enabling it creates a separate review-only child agent and returns its structured decision to the original agent.
 
+A visible Playwright demo is also opt-in:
+
+```json
+{
+  "demo": {
+    "enabled": true,
+    "plan_file": "./demo-plan.json",
+    "base_url": "http://localhost:3000",
+    "evidence_dir": "./drinking-bird-demo-evidence",
+    "headless": false,
+    "speed": 1
+  }
+}
+```
+
+Install the browser executable on the daemon host before enabling demos:
+
+```bash
+npx playwright install chromium
+```
+
+The demo runner captures screenshots, browser console errors, and page errors. A demo failure sends `VERIFY_DONE` guidance to the original implementation agent; it never silently turns a failed demo into task completion.
+
 ## Development
 
 ```bash

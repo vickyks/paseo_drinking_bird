@@ -8,6 +8,8 @@ import { loadConfig } from "./server/config.js";
 import { controllerTimelineKind, controllerTimelineVersion } from "./shared/timeline.js";
 import { contextPrompt, decisionPrompt } from "./shared/reviewer.js";
 import { requestTechnicalReview } from "./server/decision-router.js";
+import { runPlaywrightDemo } from "./server/playwright-demo.js";
+import { prompts } from "./shared/controller.js";
 
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
@@ -103,7 +105,19 @@ export default function contribute(server: PluginServerContext) {
         }
       }
 
-      if (action.state === "DONE" || action.state === "NEEDS_USER") {
+      let demoFailed = false;
+      if (action.state === "DONE" && config.demo.enabled && config.demo.plan_file) {
+        try {
+          const demo = await runPlaywrightDemo(config.demo.plan_file, config.demo);
+          console.error(JSON.stringify({ event: "DEMO_COMPLETED", agentId: event.agent.id, screenshots: demo.screenshots, consoleErrors: demo.consoleErrors.length, pageErrors: demo.pageErrors.length }));
+        } catch (error) {
+          demoFailed = true;
+          console.error(JSON.stringify({ event: "DEMO_FAILED", agentId: event.agent.id, reason: error instanceof Error ? error.message : String(error) }));
+          await agent.send(`The implementation appears complete, but the human-watchable Playwright demo failed. Inspect the demo failure and determine whether the feature is broken, the demo script is wrong, or the environment is unsuitable. Fix the appropriate issue and rerun the demo.\n\n${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      if ((action.state === "DONE" && !demoFailed) || action.state === "NEEDS_USER") {
         controllers.delete(event.agent.id);
         reviewerContextRounds.delete(event.agent.id);
         await stateStore.delete(event.agent.id);
