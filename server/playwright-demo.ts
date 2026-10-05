@@ -18,8 +18,9 @@ export async function runPlaywrightDemo(planFile: string, config: PlaywrightDemo
   const plan = JSON.parse(await readFile(planFile, "utf8")) as DemoPlan;
   const evidenceDir = resolve(config.evidence_dir);
   await mkdir(evidenceDir, { recursive: true });
-  const command = config.command ?? "npx";
-  const args = config.args ?? ["playwright", "test", planFile];
+  if (!config.command || !config.args?.length) throw new Error("Demo is enabled but no external Playwright runner command is configured");
+  const command = config.command;
+  const args = config.args;
   const result = await execFileAsync(command, args, {
     cwd: process.cwd(),
     env: {
