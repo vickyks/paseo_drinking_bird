@@ -5,6 +5,17 @@ import type { ControllerAction, ControllerConfig, TurnClassificationInput, TurnS
 export interface ControllerEvent { type: "STATE_EVALUATED" | "AUTO_CONTINUE_REQUESTED" | "CONTINUATION_PROPOSED" | "VERIFY_REQUESTED" | "NEXT_TODO_REQUESTED" | "USER_INPUT_REQUIRED" | "DECISION_REQUIRED" | "TASK_COMPLETED" | "LOOP_GUARD_TRIPPED"; state?: TurnState; confidence?: number; reason?: string; }
 export type EventSink = (event: ControllerEvent) => void;
 
+function hasCompletionEvidence(input: TurnClassificationInput): boolean {
+  const remaining = input.plan?.items.filter((item) => item.status !== "done") ?? [];
+  return (input.plan !== undefined && remaining.length === 0 && input.runtime?.tests_passed !== false)
+    || input.runtime?.tests_passed === true;
+}
+
+function claimsCompletion(message: string): boolean {
+  if (/\b(?:not|isn't|is not|unfinished|incomplete|still need|remaining)\b[\s\S]{0,30}\b(?:done|complete|completed|finished|implemented)\b/i.test(message)) return false;
+  return /\b(?:done|complete|completed|finished|implemented|all set)\b/i.test(message);
+}
+
 export interface ControllerRuntime { snapshot: ProgressSnapshot; continueAgent(prompt: string): Promise<void>; autoAct?: boolean; }
 
 export const prompts = {
@@ -27,7 +38,10 @@ export class ContinuationController {
   }
 
   async evaluate(input: TurnClassificationInput, runtime: ControllerRuntime): Promise<ControllerAction> {
-    const classification = await this.classifier.classify(input);
+    let classification = await this.classifier.classify(input);
+    if ((classification.state === "DONE" || classification.state === "CONTINUE") && claimsCompletion(input.last_agent_message) && !hasCompletionEvidence(input)) {
+      classification = { state: "VERIFY_DONE", confidence: Math.max(classification.confidence, 0.8), reason: "Completion was claimed without sufficient runtime evidence; verification is required" };
+    }
     this.emit({ type: "STATE_EVALUATED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
     const automaticState = classification.state === "CONTINUE" || classification.state === "VERIFY_DONE" || classification.state === "NEXT_TODO" || classification.state === "NEEDS_DECISION";
     if (automaticState && classification.confidence < this.autoActConfidence) {
