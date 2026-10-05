@@ -32,5 +32,7 @@ function ControllerDecision({ theme, layout, agentId, item }: PluginTimelineItem
 }
 
 export function contributeTimeline(client: PluginClientContext): PluginCleanup {
-  return client.addTimelineRenderer({ kind: controllerTimelineKind, version: controllerTimelineVersion, schema: controllerTimelineSchema, Component: ControllerDecision });
+  const removeLegacy = client.addTimelineRenderer({ kind: controllerTimelineKind, version: 1, schema: controllerTimelineSchema, Component: ControllerDecision });
+  const removeCurrent = client.addTimelineRenderer({ kind: controllerTimelineKind, version: controllerTimelineVersion, schema: controllerTimelineSchema, Component: ControllerDecision });
+  return () => { removeLegacy(); removeCurrent(); };
 }
