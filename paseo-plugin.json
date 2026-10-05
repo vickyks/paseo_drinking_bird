@@ -1,0 +1,4 @@
+{
+  "id": "paseo-drinking-bird",
+  "requirements": { "paseo": ">=0.10.0" }
+}
