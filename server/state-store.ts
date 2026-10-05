@@ -5,6 +5,7 @@ import type { LoopGuardState } from "../shared/safety.js";
 
 export interface PersistedAgentState {
   guard: LoopGuardState;
+  reviewerContextRounds?: number;
   updatedAt: string;
 }
 

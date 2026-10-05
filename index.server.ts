@@ -11,6 +11,7 @@ import { requestTechnicalReview } from "./server/decision-router.js";
 
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
+const reviewerContextRounds = new Map<string, number>();
 
 export default function contribute(server: PluginServerContext) {
   const stateStore = new StateStore();
@@ -29,6 +30,7 @@ export default function contribute(server: PluginServerContext) {
         controller = new ContinuationController(createClassifier(config.classifier), config.limits, (decision) => {
           console.error(JSON.stringify({ event: decision.type, agentId: event.agent.id, ...decision }));
         }, persisted?.guard);
+        reviewerContextRounds.set(event.agent.id, persisted?.reviewerContextRounds ?? 0);
         controllers.set(event.agent.id, controller);
       }
 
@@ -83,8 +85,18 @@ export default function contribute(server: PluginServerContext) {
               evidence: input.runtime?.files_modified?.map((file) => ({ type: "modified_file", summary: file })),
             },
           });
-          if (review.status === "DECIDED") await agent.send(decisionPrompt(review));
-          else await agent.send(contextPrompt(review.required_information));
+          if (review.status === "DECIDED") {
+            reviewerContextRounds.set(event.agent.id, 0);
+            await agent.send(decisionPrompt(review));
+          } else {
+            const rounds = (reviewerContextRounds.get(event.agent.id) ?? 0) + 1;
+            reviewerContextRounds.set(event.agent.id, rounds);
+            if (rounds > config.reviewer.max_context_round_trips) {
+              console.error(JSON.stringify({ event: "REVIEW_CONTEXT_LIMIT", agentId: event.agent.id, rounds }));
+            } else {
+              await agent.send(contextPrompt(review.required_information));
+            }
+          }
           console.error(JSON.stringify({ event: "REVIEW_COMPLETED", agentId: event.agent.id, status: review.status, decision: review.status === "DECIDED" ? review.decision : undefined }));
         } catch (error) {
           console.error(JSON.stringify({ event: "REVIEW_FAILED", agentId: event.agent.id, reason: error instanceof Error ? error.message : String(error) }));
@@ -93,9 +105,10 @@ export default function contribute(server: PluginServerContext) {
 
       if (action.state === "DONE" || action.state === "NEEDS_USER") {
         controllers.delete(event.agent.id);
+        reviewerContextRounds.delete(event.agent.id);
         await stateStore.delete(event.agent.id);
       } else {
-        await stateStore.set(event.agent.id, { guard: controller.guardState(), updatedAt: new Date().toISOString() });
+        await stateStore.set(event.agent.id, { guard: controller.guardState(), reviewerContextRounds: reviewerContextRounds.get(event.agent.id) ?? 0, updatedAt: new Date().toISOString() });
       }
     });
     queues.set(event.agent.id, current);
@@ -108,6 +121,7 @@ export default function contribute(server: PluginServerContext) {
 
   return () => {
     controllers.clear();
+    reviewerContextRounds.clear();
     queues.clear();
   };
 }
