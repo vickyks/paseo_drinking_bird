@@ -1,15 +1,17 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { ContinuationController } from "./shared/controller.js";
-import { RulesClassifier } from "./shared/classifier.js";
+import { createClassifier } from "./shared/classifier.js";
 import { buildTurnClassificationInput } from "./server/turn-input.js";
 import { latestOutputText } from "./server/inspect.js";
 import { StateStore } from "./server/state-store.js";
+import { loadConfig } from "./server/config.js";
 
 const controllers = new Map<string, ContinuationController>();
 const queues = new Map<string, Promise<void>>();
 
 export default function contribute(server: PluginServerContext) {
   const stateStore = new StateStore();
+  const configPromise = loadConfig();
 
   server.on("agent.turn_ended", async (event, { paseo, signal }) => {
     const previous = queues.get(event.agent.id) ?? Promise.resolve();
@@ -17,10 +19,11 @@ export default function contribute(server: PluginServerContext) {
       if (signal.aborted || event.outcome.kind === "canceled") return;
 
       const input = buildTurnClassificationInput(event.agent, event.timeline, event.outcome);
+      const config = await configPromise;
       let controller = controllers.get(event.agent.id);
       if (!controller) {
         const persisted = await stateStore.get(event.agent.id);
-        controller = new ContinuationController(new RulesClassifier(), {}, (decision) => {
+        controller = new ContinuationController(createClassifier(config.classifier), config.limits, (decision) => {
           console.error(JSON.stringify({ event: decision.type, agentId: event.agent.id, ...decision }));
         }, persisted?.guard);
         controllers.set(event.agent.id, controller);
