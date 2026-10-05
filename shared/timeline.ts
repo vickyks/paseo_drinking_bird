@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const controllerTimelineKind = "drinking-bird.controller-decision";
+export const controllerTimelineKind = "drinking-bird-controller-decision";
 export const controllerTimelineVersion = 2;
 export const controllerTimelineSchema = z.object({
   state: z.enum(["DONE", "CONTINUE", "VERIFY_DONE", "NEXT_TODO", "NEEDS_DECISION", "NEEDS_USER"]),
