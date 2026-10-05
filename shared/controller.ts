@@ -10,7 +10,8 @@ export interface ControllerRuntime { snapshot: ProgressSnapshot; continueAgent(p
 export const prompts = {
   CONTINUE: "Continue the current task. Do not stop merely to report progress. Complete the current work unless genuinely blocked.",
   VERIFY_DONE: "Verify that the task is actually complete. Check the requirements, tests, repository state, remaining todos, and required deliverables. Finish anything missing before stopping.",
-  NEXT_TODO: "Continue with the next appropriate unresolved item from the existing plan. Preserve the current task context and ordering constraints."
+  NEXT_TODO: "Continue with the next appropriate unresolved item from the existing plan. Preserve the current task context and ordering constraints.",
+  NEEDS_USER: "Tell me what you need from me."
 } as const;
 
 export class ContinuationController {
@@ -32,15 +33,19 @@ export class ContinuationController {
     if (automaticState && classification.confidence < this.autoActConfidence) {
       const reason = `Low-confidence classification (${classification.confidence.toFixed(2)}); automatic action requires ${this.autoActConfidence.toFixed(2)}`;
       this.emit({ type: "USER_INPUT_REQUIRED", state: "NEEDS_USER", confidence: classification.confidence, reason });
-      return { state: "NEEDS_USER", confidence: classification.confidence, reason };
+      return { state: "NEEDS_USER", confidence: classification.confidence, reason, prompt: prompts.NEEDS_USER };
     }
     const guardReason = classification.state === "DONE" || classification.state === "NEEDS_USER" ? undefined : this.guard.record(classification, runtime.snapshot);
     if (guardReason) {
       this.emit({ type: "LOOP_GUARD_TRIPPED", reason: guardReason });
-      return { state: "NEEDS_USER", confidence: 1, reason: guardReason };
+      return { state: "NEEDS_USER", confidence: 1, reason: guardReason, prompt: prompts.NEEDS_USER };
     }
     if (classification.state === "DONE") { this.emit({ type: "TASK_COMPLETED", state: "DONE", confidence: classification.confidence, reason: classification.reason }); return { ...classification, reason: classification.reason ?? "Task complete" }; }
-    if (classification.state === "NEEDS_USER" || classification.state === "NEEDS_DECISION") { this.emit({ type: classification.state === "NEEDS_USER" ? "USER_INPUT_REQUIRED" : "DECISION_REQUIRED", state: classification.state, confidence: classification.confidence, reason: classification.reason }); return { ...classification, reason: classification.reason ?? `Controller requires ${classification.state}` };
+    if (classification.state === "NEEDS_USER" || classification.state === "NEEDS_DECISION") {
+      this.emit({ type: classification.state === "NEEDS_USER" ? "USER_INPUT_REQUIRED" : "DECISION_REQUIRED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
+      return classification.state === "NEEDS_USER"
+        ? { ...classification, prompt: prompts.NEEDS_USER, reason: classification.reason ?? "Controller requires user input" }
+        : { ...classification, reason: classification.reason ?? `Controller requires ${classification.state}` };
     }
     const prompt = prompts[classification.state];
     this.emit({ type: runtime.autoAct === false ? "CONTINUATION_PROPOSED" : classification.state === "CONTINUE" ? "AUTO_CONTINUE_REQUESTED" : classification.state === "VERIFY_DONE" ? "VERIFY_REQUESTED" : "NEXT_TODO_REQUESTED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
