@@ -22,7 +22,7 @@ export const prompts = {
   CONTINUE: "Continue the current task. Do not stop merely to report progress. Complete the current work unless genuinely blocked.",
   VERIFY_DONE: "Verify that the task is actually complete. Check the requirements, tests, repository state, remaining todos, and required deliverables. Finish anything missing before stopping.",
   NEXT_TODO: "Continue with the next appropriate unresolved item from the existing plan. Preserve the current task context and ordering constraints.",
-  NEEDS_USER: "Tell me what you need from me."
+  NEEDS_USER: "Tell me what decisions or actions you need me to take. State the relevant facts and options, then stop and wait for my response."
 } as const;
 
 export class ContinuationController {

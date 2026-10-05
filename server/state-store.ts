@@ -16,6 +16,8 @@ export interface PersistedAgentState {
   guard: LoopGuardState;
   reviewerContextRounds?: number;
   pendingAction?: PendingActionState;
+  userCheckpointPending?: boolean;
+  awaitingUserResponse?: boolean;
   updatedAt: string;
 }
 

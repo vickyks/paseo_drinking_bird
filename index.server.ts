@@ -34,6 +34,15 @@ export default function contribute(server: PluginServerContext) {
     const actionStatus = action === "approve" ? "approved" : "rejected";
     await agent.timeline.append({ type: "plugin", id: pending.timelineId, kind: controllerTimelineKind, version: controllerTimelineVersion, data: { state: pending.state, confidence: pending.confidence, reason: pending.reason, turnId: pending.turnId, action_status: actionStatus, prompt: pending.prompt } });
     pendingActions.delete(agentId);
+    const persisted = await stateStore.get(agentId);
+    if (persisted) {
+      await stateStore.set(agentId, {
+        ...persisted,
+        pendingAction: undefined,
+        userCheckpointPending: action === "approve" && pending.state === "NEEDS_USER",
+        updatedAt: new Date().toISOString(),
+      });
+    }
     if (action === "approve") await agent.send(pending.prompt);
     return { ok: true, message: action === "approve" ? "Drinking Bird action approved and sent." : "Drinking Bird action rejected." };
   });
@@ -42,6 +51,15 @@ export default function contribute(server: PluginServerContext) {
     const previous = queues.get(event.agent.id) ?? Promise.resolve();
     const current = previous.catch(() => undefined).then(async () => {
       if (signal.aborted || event.outcome.kind === "canceled") return;
+
+      const persistedBeforeTurn = await stateStore.get(event.agent.id);
+      if (persistedBeforeTurn?.userCheckpointPending) {
+        await stateStore.set(event.agent.id, { ...persistedBeforeTurn, userCheckpointPending: false, awaitingUserResponse: true, updatedAt: new Date().toISOString() });
+        return;
+      }
+      if (persistedBeforeTurn?.awaitingUserResponse) {
+        await stateStore.set(event.agent.id, { ...persistedBeforeTurn, awaitingUserResponse: false, updatedAt: new Date().toISOString() });
+      }
 
       const input = buildTurnClassificationInput(event.agent, event.timeline, event.outcome);
       const config = await getConfig();
