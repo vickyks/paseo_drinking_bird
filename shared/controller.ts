@@ -2,7 +2,7 @@ import type { TurnClassifier } from "./classifier.js";
 import { LoopGuard, type LoopGuardState, type ProgressSnapshot } from "./safety.js";
 import type { ControllerAction, ControllerConfig, TurnClassificationInput, TurnState } from "./types.js";
 
-export interface ControllerEvent { type: "STATE_EVALUATED" | "AUTO_CONTINUE_REQUESTED" | "VERIFY_REQUESTED" | "NEXT_TODO_REQUESTED" | "USER_INPUT_REQUIRED" | "DECISION_REQUIRED" | "TASK_COMPLETED" | "LOOP_GUARD_TRIPPED"; state?: TurnState; confidence?: number; reason?: string; }
+export interface ControllerEvent { type: "STATE_EVALUATED" | "AUTO_CONTINUE_REQUESTED" | "CONTINUATION_PROPOSED" | "VERIFY_REQUESTED" | "NEXT_TODO_REQUESTED" | "USER_INPUT_REQUIRED" | "DECISION_REQUIRED" | "TASK_COMPLETED" | "LOOP_GUARD_TRIPPED"; state?: TurnState; confidence?: number; reason?: string; }
 export type EventSink = (event: ControllerEvent) => void;
 
 export interface ControllerRuntime { snapshot: ProgressSnapshot; continueAgent(prompt: string): Promise<void>; autoAct?: boolean; }
@@ -43,7 +43,7 @@ export class ContinuationController {
     if (classification.state === "NEEDS_USER" || classification.state === "NEEDS_DECISION") { this.emit({ type: classification.state === "NEEDS_USER" ? "USER_INPUT_REQUIRED" : "DECISION_REQUIRED", state: classification.state, confidence: classification.confidence, reason: classification.reason }); return { ...classification, reason: classification.reason ?? `Controller requires ${classification.state}` };
     }
     const prompt = prompts[classification.state];
-    this.emit({ type: classification.state === "CONTINUE" ? "AUTO_CONTINUE_REQUESTED" : classification.state === "VERIFY_DONE" ? "VERIFY_REQUESTED" : "NEXT_TODO_REQUESTED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
+    this.emit({ type: runtime.autoAct === false ? "CONTINUATION_PROPOSED" : classification.state === "CONTINUE" ? "AUTO_CONTINUE_REQUESTED" : classification.state === "VERIFY_DONE" ? "VERIFY_REQUESTED" : "NEXT_TODO_REQUESTED", state: classification.state, confidence: classification.confidence, reason: classification.reason });
     if (runtime.autoAct !== false) await runtime.continueAgent(prompt);
     return { ...classification, prompt, reason: classification.reason ?? `Requested ${classification.state}` };
   }
