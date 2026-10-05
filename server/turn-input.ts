@@ -7,6 +7,11 @@ function lastUserRequest(timeline: readonly AgentTimelineItem[]): string {
   return [...timeline].reverse().find((item) => item.type === "user_message")?.text ?? "";
 }
 
+function currentTurn(timeline: readonly AgentTimelineItem[]): readonly AgentTimelineItem[] {
+  const lastUserIndex = [...timeline].map((item) => item.type).lastIndexOf("user_message");
+  return lastUserIndex >= 0 ? timeline.slice(lastUserIndex) : timeline;
+}
+
 function toolCalls(timeline: readonly AgentTimelineItem[]): ToolCallTimelineItem[] {
   return timeline.filter((item): item is ToolCallTimelineItem => item.type === "tool_call");
 }
@@ -34,21 +39,25 @@ function activity(timeline: readonly AgentTimelineItem[]): Activity[] {
 }
 
 export function buildTurnClassificationInput(agent: PluginHookAgent, timeline: readonly AgentTimelineItem[], outcome: PluginTurnOutcome): TurnClassificationInput {
-  const calls = toolCalls(timeline);
-  const todos = todoItems(timeline);
+  const turnTimeline = currentTurn(timeline);
+  const calls = toolCalls(turnTimeline);
+  const todos = todoItems(turnTimeline);
   const errors = calls.filter((call) => call.status !== "completed").map((call) => call.error ? `${call.name}: ${String(call.error)}` : `${call.name}: ${call.status}`);
   if (outcome.kind === "failed") errors.push(outcome.error.message);
   if (outcome.kind === "canceled") errors.push(`Turn canceled: ${outcome.reason}`);
 
-  const testCalls = calls.filter((call) => call.name === "shell" && call.detail.type === "shell" && /\b(test|check|lint|build)\b/i.test(call.detail.command));
-  const testsRun = testCalls.length > 0;
-  const testsPassed = testsRun ? testCalls.every((call) => call.status === "completed" && call.detail.type === "shell" && call.detail.exitCode === 0) : undefined;
+  const output = latestOutputText(turnTimeline);
+  const testCalls = calls.filter((call) => call.detail.type === "shell" && /\b(test|check|lint|build)\b/i.test(call.detail.command));
+  const testResultMentioned = /\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b|\btests?\s+passed\b/i.test(output);
+  const testsRun = testCalls.length > 0 || testResultMentioned;
+  const structuredTestsPassed = testCalls.length > 0 && testCalls.every((call) => call.status === "completed" && call.detail.type === "shell" && (call.detail.exitCode === 0 || call.detail.exitCode === null || call.detail.exitCode === undefined));
+  const testsPassed = testsRun ? (testCalls.length > 0 ? structuredTestsPassed : testResultMentioned && calls.some((call) => call.status === "completed")) : undefined;
 
   return {
     task: { original_request: lastUserRequest(timeline), goal: agent.title ?? undefined },
     plan: todos.length ? { items: todos.map((todo, index) => ({ id: todo.id ?? `todo-${index + 1}`, text: todo.text, status: todo.status === "completed" || todo.completed ? "done" : todo.status === "in_progress" ? "in_progress" : "pending" })) } : undefined,
-    recent_activity: activity(timeline).slice(-20),
-    last_agent_message: latestOutputText(timeline),
+    recent_activity: activity(turnTimeline).slice(-20),
+    last_agent_message: output,
     runtime: {
       files_modified: modifiedFiles(timeline),
       tests_run: testsRun,
