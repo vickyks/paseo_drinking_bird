@@ -6,7 +6,7 @@ import type { LoopGuardState } from "../shared/safety.js";
 export interface PendingActionState {
   timelineId: string;
   turnId: string | null;
-  state: "CONTINUE" | "VERIFY_DONE" | "NEXT_TODO" | "NEEDS_USER";
+  state: "CONTINUE" | "VERIFY_DONE" | "NEXT_TODO" | "NEEDS_USER" | "RECENTER";
   prompt: string;
   reason: string;
   confidence: number;

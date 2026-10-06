@@ -1,4 +1,5 @@
-import type { ClassifierConfig, TurnClassification, TurnClassificationInput, TurnState } from "./types.js";
+import type { ClassifierConfig, DeciderDecision, TurnClassification, TurnClassificationInput, TurnState } from "./types.js";
+import { buildDeciderPayload, decodeDeciderDecision } from "./decider-prompt.js";
 
 export interface TurnClassifier {
   classify(input: TurnClassificationInput): Promise<TurnClassification>;
@@ -39,28 +40,26 @@ export class HybridClassifier implements TurnClassifier {
 }
 
 export class HttpClassifier implements TurnClassifier {
-  constructor(private readonly endpoint: string, private readonly config: Pick<ClassifierConfig, "model" | "api_key"> = {}) {}
+  constructor(private readonly endpoint: string, private readonly config: Partial<Pick<ClassifierConfig, "model" | "api_key" | "decider_prompt" | "provider">> = {}) {}
   async classify(input: TurnClassificationInput): Promise<TurnClassification> {
-    const response = await fetch(this.endpoint, { method: "POST", headers: { "content-type": "application/json", ...(this.config.api_key ? { authorization: `Bearer ${this.config.api_key}` } : {}) }, body: JSON.stringify({ model: this.config.model, input }) });
+    const payload = this.config.provider === "jev"
+      ? { model: this.config.model, ...buildDeciderPayload(input, this.config) }
+      : { model: this.config.model, input };
+    const response = await fetch(this.endpoint, { method: "POST", headers: { "content-type": "application/json", ...(this.config.api_key ? { authorization: `Bearer ${this.config.api_key}` } : {}) }, body: JSON.stringify(payload) });
     if (!response.ok) throw new Error(`Classifier request failed with HTTP ${response.status}`);
-    const payload = await response.json() as Record<string, unknown>;
-    const candidate = payload.state ? payload : extractOpenAiContent(payload);
-    if (!candidate || typeof candidate.state !== "string" || !isTurnState(candidate.state)) throw new Error("Classifier returned an invalid state");
-    const confidence = typeof candidate.confidence === "number" ? Math.max(0, Math.min(1, candidate.confidence)) : 0;
-    return { state: candidate.state, confidence, reason: typeof candidate.reason === "string" ? candidate.reason : undefined };
+    const body = await response.json() as Record<string, unknown>;
+    const candidate = decodeDeciderDecision(body) ?? extractOpenAiContent(body);
+    if (!candidate) throw new Error("Classifier returned an invalid decision");
+    return candidate.classification;
   }
 }
 
-function extractOpenAiContent(payload: Record<string, unknown>): Record<string, unknown> | undefined {
+function extractOpenAiContent(payload: Record<string, unknown>): { classification: TurnClassification; decision: DeciderDecision } | undefined {
   const choices = payload.choices;
   if (!Array.isArray(choices)) return undefined;
   const content = (choices[0] as { message?: { content?: unknown } } | undefined)?.message?.content;
   if (typeof content !== "string") return undefined;
-  try { return JSON.parse(content) as Record<string, unknown>; } catch { return undefined; }
-}
-
-function isTurnState(value: string): value is TurnState {
-  return ["DONE", "CONTINUE", "VERIFY_DONE", "NEXT_TODO", "NEEDS_DECISION", "NEEDS_USER"].includes(value);
+  try { return decodeDeciderDecision(JSON.parse(content) as Record<string, unknown>); } catch { return undefined; }
 }
 
 export function createClassifier(config: ClassifierConfig): TurnClassifier {

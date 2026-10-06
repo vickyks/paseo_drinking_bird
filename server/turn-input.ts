@@ -3,8 +3,8 @@ import type { PluginHookAgent, PluginTurnOutcome } from "@getpaseo/plugin/server
 import type { TurnClassificationInput } from "../shared/types.js";
 import { latestOutputText, todoItems } from "./inspect.js";
 
-function lastUserRequest(timeline: readonly AgentTimelineItem[]): string {
-  return [...timeline].reverse().find((item) => item.type === "user_message")?.text ?? "";
+function userRequests(timeline: readonly AgentTimelineItem[]): string[] {
+  return [...timeline].reverse().filter((item) => item.type === "user_message").map((item) => item.text).reverse();
 }
 
 function currentTurn(timeline: readonly AgentTimelineItem[]): readonly AgentTimelineItem[] {
@@ -53,8 +53,13 @@ export function buildTurnClassificationInput(agent: PluginHookAgent, timeline: r
   const structuredTestsPassed = testCalls.length > 0 && testCalls.every((call) => call.status === "completed" && call.detail.type === "shell" && (call.detail.exitCode === 0 || call.detail.exitCode === null || call.detail.exitCode === undefined));
   const testsPassed = testsRun ? (testCalls.length > 0 ? structuredTestsPassed : testResultMentioned && calls.some((call) => call.status === "completed")) : undefined;
 
+  const requests = userRequests(timeline);
+  const firstRequest = requests[0];
+  const lastUserMessage = requests[requests.length - 1];
+
   return {
-    task: { original_request: lastUserRequest(timeline), goal: agent.title ?? undefined },
+    task: { original_request: firstRequest ?? lastUserMessage, goal: agent.title ?? undefined },
+    last_user_message: lastUserMessage,
     plan: todos.length ? { items: todos.map((todo, index) => ({ id: todo.id ?? `todo-${index + 1}`, text: todo.text, status: todo.status === "completed" || todo.completed ? "done" : todo.status === "in_progress" ? "in_progress" : "pending" })) } : undefined,
     recent_activity: activity(turnTimeline).slice(-20),
     last_agent_message: output,
